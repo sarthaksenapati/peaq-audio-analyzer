@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.log
+recordings/
+extracted_audio/
+*.xlsx
+*.png
+.DS_Store
