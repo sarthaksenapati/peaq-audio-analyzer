@@ -7,32 +7,26 @@ from utils.plotting_utils import plot_peaq_results
 
 def run_peaq_analysis(ref_path, test_path, graph_output_folder):
     try:
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("🔬 STARTING PEAQ AUDIO QUALITY ANALYSIS")
-        print("="*60)
+        print("=" * 60)
 
-        ref_sr, ref = load_audio(ref_path, target_sr=44100, mono=True)
-        test_sr, test = load_audio(test_path, target_sr=44100, mono=True)
+        ref_sr, ref = load_audio(ref_path)
+        test_sr, test = load_audio(test_path)
 
         print(f"📁 Reference: {ref_path}")
         print(f"📁 Test: {test_path}")
         print(f"📐 Original lengths — ref: {len(ref)}, test: {len(test)}")
 
-        # Ensure both signals have the same length BEFORE alignment
-        min_len = min(len(ref), len(test))
-        ref = ref[:min_len]
-        test = test[:min_len]
-        print(f"📐 Pre-alignment trim to: {min_len} samples")
-
-        # Log signal difference before alignment
-        diff_before = np.mean(np.abs(ref - test))
+        min_len_before = min(len(ref), len(test))
+        diff_before = np.mean(np.abs(ref[:min_len_before] - test[:min_len_before]))
         print(f"🔍 Signal difference BEFORE alignment: {diff_before:.6f}")
 
+        # ✅ Use your proven waveform-level cross-correlation
         ref, test, lag = align_signals_by_cross_correlation(ref, test)
 
-        # Log signal difference after alignment
         diff_after = np.mean(np.abs(ref - test))
-        print(f"🧭 Aligned signals by shifting test signal by {lag / ref_sr:.3f} seconds")
+        print(f"🧭 Aligned signals by shifting by {lag / ref_sr:.3f} seconds")
         print(f"📐 Aligned lengths — ref: {len(ref)}, test: {len(test)}")
         print(f"🔍 Signal difference AFTER alignment: {diff_after:.6f}")
 
