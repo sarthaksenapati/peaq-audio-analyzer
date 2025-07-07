@@ -1,22 +1,23 @@
-# screen_recorder.py
-
 import time
 from adb_controller import tap
+from device_config_loader import get_device_coords
 
 def start_recording_az():
-    tap(1043, 1188)  # expand menu
+    coords = get_device_coords()
+    tap(coords['ExpandMenuX1'], coords['ExpandMenuY1'])
     time.sleep(1)
-    tap(932, 992)    # start AZ
+    tap(coords['StartAZX'], coords['StartAZY'])
     time.sleep(1.5)
-    tap(563, 1105)   # start recorder
+    tap(coords['StartRecX'], coords['StartRecY'])
     time.sleep(1.5)
-    tap(563, 1331)   # confirm
+    tap(coords['ConfirmX'], coords['ConfirmY'])
     time.sleep(1.5)
-    tap(862, 1764)   # minimize or home
+    tap(coords['MinimizeX'], coords['MinimizeY'])
     time.sleep(2)
 
 def stop_and_save_recording_az():
-    tap(1043, 1188)  # expand menu
+    coords = get_device_coords()
+    tap(coords['ExpandMenuX2'], coords['ExpandMenuY2'])
     time.sleep(2)
-    tap(837, 1191)   # stop
+    tap(coords['StopX'], coords['StopY'])
     time.sleep(4)

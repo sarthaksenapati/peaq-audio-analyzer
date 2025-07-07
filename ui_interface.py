@@ -1,10 +1,9 @@
-# ui_interface.py
-
 from modes.single_mode import run_single_mode
 from modes.batch_mode import run_batch_mode
 from modes.folder_push_mode import run_folder_push_batch_mode
 from modes.manual_comparison_mode import run_manual_comparison_mode
 from modes.excel_mode import run_excel_based_testing_mode
+from device_config_loader import load_coordinates_from_default_file
 
 def display_main_menu():
     print("\n🎬 Flawless Audio Capture + PEAQ Analyzer")
@@ -18,10 +17,15 @@ def display_main_menu():
     return input("> ").strip()
 
 def route_user(choice):
+    if choice in {'1', '2', '3', '4', '5'}:
+        # Load device-specific tap coordinates before anything starts
+        load_coordinates_from_default_file()
+
+
     match choice:
         case '1': run_single_mode()
         case '2': run_batch_mode()
         case '3': run_folder_push_batch_mode()
         case '4': run_manual_comparison_mode()
         case '5': run_excel_based_testing_mode()
-        case _: print("❌ Invalid choice. Please select 1–5.")
+        case _: print("❌ Invalid choice. Please select 1-5.")

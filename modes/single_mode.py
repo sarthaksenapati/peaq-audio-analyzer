@@ -8,6 +8,9 @@ from peaq_analyzer import run_peaq_analysis
 from config import output_audio_dir
 from audio_utils import get_audio_duration
 from file_manager import select_audio_files
+import os
+os.makedirs("./graphs", exist_ok=True)
+
 
 def play_audio(file_path):
     filename = os.path.basename(file_path)
@@ -51,5 +54,6 @@ def run_single_mode():
 
     output_clean = os.path.join(output_audio_dir, f"{os.path.splitext(os.path.basename(audio_file))[0]}_clean.wav")
     if recorder.post_process(pulled_file, audio_file, output_clean):
-        odg, quality = run_peaq_analysis(audio_file, output_clean)
+        odg, quality = run_peaq_analysis(audio_file, output_clean, "./graphs")
+
         print(f"\n🎯 ODG: {odg:.2f} | Quality: {quality}")
