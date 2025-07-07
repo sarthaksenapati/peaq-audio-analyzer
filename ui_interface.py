@@ -14,7 +14,7 @@ def display_main_menu():
     print("  [2] Batch Mode (Multiple File-Push + Record + Analyze + Report)(Select Files)")
     print("  [3] Folder Push Mode (Folder-Push + Record + Analyze + Report)")
     print("  [4] Manual Comparison(Compares two files already available in the directory)")
-    print("  [5] Excel-Driven Testing (Not implemented)")
+    print("  [5] Excel-Driven Testing (Asks for Excel file with test cases and runs them)")
     return input("> ").strip()
 
 def route_user(choice):
