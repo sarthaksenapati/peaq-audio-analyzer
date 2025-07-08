@@ -18,16 +18,17 @@ def run_excel_based_testing_mode():
     if not check_adb_connection():
         return
 
-    excel_path = filedialog.askopenfilename(
-        title="Select Excel File", filetypes=[("Excel Files", "*.xlsx *.xls")]
-    )
-    if not excel_path:
-        print("❌ No Excel file selected.")
+    # Fixed paths
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # points to 'donut/'
+    excel_path = os.path.join(root_dir, "testcase.xlsx")
+    folder_path = os.path.join(root_dir, "audio_files")  # <-- Customize if needed
+
+    if not os.path.exists(excel_path):
+        print(f"❌ Excel file not found at {excel_path}")
         return
 
-    folder_path = filedialog.askdirectory(title="Select Folder Containing Audio Files")
-    if not folder_path:
-        print("❌ No folder selected.")
+    if not os.path.exists(folder_path):
+        print(f"❌ Audio folder not found at {folder_path}")
         return
 
     try:
@@ -44,14 +45,14 @@ def run_excel_based_testing_mode():
         ]
 
         if not local_audio_files:
-            print("❌ No valid audio files found in the selected folder.")
+            print("❌ No valid audio files found in the audio folder.")
             return
 
         processor = BatchProcessor()
         recorder = FlawlessRecorder()
 
-        print(f"📁 Selected Excel: {os.path.basename(excel_path)}")
-        print(f"📁 Folder: {folder_path}")
+        print(f"📁 Using Excel: {os.path.basename(excel_path)}")
+        print(f"📁 Audio Folder: {folder_path}")
         print(f"🎵 Total Files: {len(local_audio_files)}")
 
         # Reset device audio dir
@@ -78,7 +79,6 @@ def run_excel_based_testing_mode():
                 elif audio_file.lower().endswith(".flac"):
                     audio_type = "audio/flac"
 
-                # Start recording before playback
                 recorder.start(audio_file, lambda x: None)
                 time.sleep(1.5)
 
@@ -99,19 +99,16 @@ def run_excel_based_testing_mode():
                 newest = sorted(new_files)[-1]
                 pulled = pull_recording(newest)
 
-                # ✅ Save clean audio to extracted_audio/
                 output_audio = os.path.join("extracted_audio", f"{base_name}_clean.wav")
                 if not recorder.post_process(pulled, audio_file, output_audio):
                     raise RuntimeError("Post-processing failed.")
 
-                # ✅ Run PEAQ and plot to graphs folder
                 odg, quality = run_peaq_analysis(audio_file, output_audio, processor.graphs_folder)
                 if odg is None:
                     raise RuntimeError("PEAQ analysis failed.")
 
                 graph_path = os.path.join(processor.graphs_folder, f"{base_name}.png")
 
-                # ✅ Save to Excel inside batch_results/batch_xxxx
                 processor.add_result(
                     audio_file, odg, quality,
                     time.time() - start_time,
