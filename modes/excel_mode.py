@@ -2,6 +2,8 @@
 import os
 import time
 import pandas as pd
+import subprocess
+import urllib.parse
 from tkinter import filedialog
 from batch_processor import BatchProcessor
 from flawless_recorder import FlawlessRecorder
@@ -9,8 +11,23 @@ from adb_controller import check_adb_connection, list_recordings, pull_recording
 from audio_utils import get_audio_duration
 from peaq_analyzer import run_peaq_analysis
 from config import output_audio_dir, device_audio_dir
-import subprocess
-import urllib.parse
+from playback_options import choose_playback_method  # ✅ New: ask user for playback method
+
+
+def wait_for_new_recording(before_files, max_retries=3, retry_delay=2):
+    for attempt in range(max_retries):
+        time.sleep(retry_delay)
+        after_files = list_recordings()
+        new_files = sorted(set(after_files) - set(before_files))
+
+        if new_files:
+            print(f"✅ Found {len(new_files)} new recording(s) after {attempt + 1} attempt(s)")
+            return new_files
+
+        print(f"⏳ Attempt {attempt + 1}/{max_retries}: No new recordings found, retrying...")
+
+    return []
+
 
 def run_excel_based_testing_mode():
     print("📊 Excel-Driven Mode")
@@ -18,10 +35,9 @@ def run_excel_based_testing_mode():
     if not check_adb_connection():
         return
 
-    # Fixed paths
-    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # points to 'donut/'
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     excel_path = os.path.join(root_dir, "testcase.xlsx")
-    folder_path = os.path.join(root_dir, "audio_files")  # <-- Customize if needed
+    folder_path = os.path.join(root_dir, "audio_files")
 
     if not os.path.exists(excel_path):
         print(f"❌ Excel file not found at {excel_path}")
@@ -55,7 +71,8 @@ def run_excel_based_testing_mode():
         print(f"📁 Audio Folder: {folder_path}")
         print(f"🎵 Total Files: {len(local_audio_files)}")
 
-        # Reset device audio dir
+        playback_func = choose_playback_method()
+
         subprocess.run(["adb", "shell", f"rm -rf {device_audio_dir}"], capture_output=True)
         subprocess.run(["adb", "shell", f"mkdir -p {device_audio_dir}"], capture_output=True)
 
@@ -65,56 +82,46 @@ def run_excel_based_testing_mode():
         for audio_file in local_audio_files:
             start_time = time.time()
             base_name = os.path.splitext(os.path.basename(audio_file))[0]
+
             try:
                 duration = get_audio_duration(audio_file)
-                device_file_path = f"{device_audio_dir}/{os.path.basename(audio_file)}"
-
                 before = list_recordings()
 
-                # Escape for URL
-                escaped = urllib.parse.quote(device_file_path)
-                audio_type = "audio/wav"
-                if audio_file.lower().endswith(".mp3"):
-                    audio_type = "audio/mpeg"
-                elif audio_file.lower().endswith(".flac"):
-                    audio_type = "audio/flac"
+                print("🎙️ Starting recording...")
+                recorder.start(audio_file, playback_func)
 
-                recorder.start(audio_file, lambda x: None)
-                time.sleep(1.5)
+                wait_time = duration 
+                print(f"⏱️ Waiting {wait_time:.1f}s for playback...")
+                time.sleep(0)
 
-                subprocess.run([
-                    "adb", "shell", "am", "start", "-a", "android.intent.action.VIEW",
-                    "-d", f"file://{escaped}", "-t", audio_type
-                ], capture_output=True, text=True)
-
-                time.sleep(duration + 2)
+                print("⏹️ Stopping recording...")
                 recorder.stop()
-                time.sleep(4)
 
-                after = list_recordings()
-                new_files = list(set(after) - set(before))
+                print("💾 Waiting for recording to be saved...")
+                new_files = wait_for_new_recording(before)
+
                 if not new_files:
                     raise RuntimeError("No new recording found.")
 
-                newest = sorted(new_files)[-1]
-                pulled = pull_recording(newest)
+                latest = sorted(new_files)[-1]
+                pulled = pull_recording(latest)
 
                 output_audio = os.path.join("extracted_audio", f"{base_name}_clean.wav")
                 if not recorder.post_process(pulled, audio_file, output_audio):
                     raise RuntimeError("Post-processing failed.")
+
+                if not os.path.exists(output_audio):
+                    raise RuntimeError("Expected trimmed output not found.")
 
                 odg, quality = run_peaq_analysis(audio_file, output_audio, processor.graphs_folder)
                 if odg is None:
                     raise RuntimeError("PEAQ analysis failed.")
 
                 graph_path = os.path.join(processor.graphs_folder, f"{base_name}.png")
+                interruptions = len(getattr(recorder.tracker, 'interruptions', []))
 
-                processor.add_result(
-                    audio_file, odg, quality,
-                    time.time() - start_time,
-                    0,
-                    graph_path
-                )
+                processor.add_result(audio_file, odg, quality, time.time() - start_time,
+                                     interruptions, graph_path)
                 processor.save_results_to_excel()
 
             except Exception as e:

@@ -2,20 +2,17 @@
 
 import time
 import os
+import subprocess
+import urllib.parse
 from adb_controller import check_adb_connection, push_audio, list_recordings, pull_recording
 from flawless_recorder import FlawlessRecorder
 from peaq_analyzer import run_peaq_analysis
 from config import output_audio_dir
 from audio_utils import get_audio_duration
 from file_manager import select_audio_files
-import os
+from playback_options import choose_playback_method
+
 os.makedirs("./graphs", exist_ok=True)
-
-
-def play_audio(file_path):
-    filename = os.path.basename(file_path)
-    device_path = f"/sdcard/{filename}"
-    os.system(f'adb shell am start -a android.intent.action.VIEW -d file://{device_path} -t audio/wav')
 
 def run_single_mode():
     print("🎧 Select an audio file to push and record...")
@@ -32,8 +29,14 @@ def run_single_mode():
     recorder = FlawlessRecorder()
     before = list_recordings()
 
-    recorder.start(audio_file, play_audio)
-    time.sleep(duration + 2)
+    play_func = choose_playback_method()
+    recorder.start(audio_file, play_func)
+
+    wait_time = duration 
+    print(f"⏳ Waiting {wait_time:.1f}s for playback to finish...")
+    time.sleep(0)
+
+    print("⏹️ Stopping recording...")
     recorder.stop()
 
     time.sleep(3)  # Let AZ Screen Recorder save the file
@@ -55,5 +58,4 @@ def run_single_mode():
     output_clean = os.path.join(output_audio_dir, f"{os.path.splitext(os.path.basename(audio_file))[0]}_clean.wav")
     if recorder.post_process(pulled_file, audio_file, output_clean):
         odg, quality = run_peaq_analysis(audio_file, output_clean, "./graphs")
-
         print(f"\n🎯 ODG: {odg:.2f} | Quality: {quality}")

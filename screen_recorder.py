@@ -1,3 +1,5 @@
+#screen_recorder.py
+
 import time
 from adb_controller import tap
 from device_config_loader import get_device_coords

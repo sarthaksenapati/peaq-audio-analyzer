@@ -6,6 +6,7 @@ from flawless_recorder import FlawlessRecorder
 from adb_controller import check_adb_connection, list_recordings, pull_recording
 from audio_utils import get_audio_duration
 from peaq_analyzer import run_peaq_analysis
+from playback_options import choose_playback_method  # ✅ Unified playback control
 
 def run_folder_push_batch_mode():
     print("🌀 Folder Push Batch Mode")
@@ -15,7 +16,7 @@ def run_folder_push_batch_mode():
 
     processor = BatchProcessor()
     recorder = FlawlessRecorder()
-    
+
     folder_result = processor.select_folder_to_push()
     if not folder_result:
         print("❌ No folder selected.")
@@ -29,40 +30,22 @@ def run_folder_push_batch_mode():
         print("❌ No .wav files found in the selected folder.")
         return
 
+    # ✅ Ask user which playback method to use
+    playback_func = choose_playback_method()
+
     for audio_file in audio_files:
         start_time = time.time()
         base_name = os.path.splitext(os.path.basename(audio_file))[0]
 
         try:
-            # Push current file to device
-            push_result = subprocess.run(["adb", "push", audio_file, "/sdcard/"], capture_output=True)
-            if push_result.returncode != 0:
-                raise RuntimeError(f"Failed to push file: {audio_file}")
-
             duration = get_audio_duration(audio_file)
-            filename = os.path.basename(audio_file)
-            device_file_path = f"/sdcard/{filename}"
 
             before = list_recordings()
 
-            escaped = urllib.parse.quote(device_file_path)
-            audio_type = "audio/wav"
-            if filename.lower().endswith('.mp3'):
-                audio_type = "audio/mpeg"
-            elif filename.lower().endswith('.flac'):
-                audio_type = "audio/flac"
-
-            def on_start(_):
-                time.sleep(1.2)
-                subprocess.run([
-                    "adb", "shell", "am", "start", "-a", "android.intent.action.VIEW",
-                    "-d", f"file://{escaped}", "-t", audio_type
-                ], capture_output=True, text=True)
-
-            recorder.start(audio_file, on_start)
-            time.sleep(duration + 3.5)
+            # ✅ Use unified playback + trim logic
+            recorder.start(audio_file, playback_func)
+            time.sleep(duration)  # Let the recording run slightly longer than audio
             recorder.stop()
-            time.sleep(4)
 
             after = list_recordings()
             new_files = list(set(after) - set(before))
