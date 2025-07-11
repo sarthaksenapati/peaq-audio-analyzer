@@ -1,0 +1,11 @@
+# --- Python Dependencies ---
+
+numpy                 # Numerical computations
+scipy                 # Signal processing
+matplotlib            # Plotting and waveform visualization
+openpyxl              # Excel file reading/writing (for tap config)
+pyautogui             # Mouse and keyboard automation (tap simulation)
+opencv-python         # Screen and frame capture for playback detection
+soundfile             # WAV audio read/write
+pydub                 # MP3, AAC, M4A support (requires ffmpeg installed)
+ffmpeg-python         # Optional wrapper around ffmpeg for conversions
