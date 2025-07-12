@@ -48,7 +48,7 @@ def process_single_file(file_path, recorder, processor, play_func):
 
         wait_time = duration 
         print(f"⏱️ Waiting {wait_time:.1f}s for playback...")
-        time.sleep(0)
+        time.sleep(wait_time)
 
         print("⏹️ Stopping recording...")
         recorder.stop()

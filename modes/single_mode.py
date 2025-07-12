@@ -34,7 +34,7 @@ def run_single_mode():
 
     wait_time = duration 
     print(f"⏳ Waiting {wait_time:.1f}s for playback to finish...")
-    time.sleep(0)
+    time.sleep(wait_time)
 
     print("⏹️ Stopping recording...")
     recorder.stop()
