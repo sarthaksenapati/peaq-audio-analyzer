@@ -1,17 +1,14 @@
-# excel_mode.py
 import os
 import time
 import pandas as pd
 import subprocess
-import urllib.parse
-from tkinter import filedialog
 from batch_processor import BatchProcessor
 from flawless_recorder import FlawlessRecorder
 from adb_controller import check_adb_connection, list_recordings, pull_recording
 from audio_utils import get_audio_duration
 from peaq_analyzer import run_peaq_analysis
 from config import output_audio_dir, device_audio_dir
-from playback_options import choose_playback_method  # ✅ New: ask user for playback method
+from playback_options import choose_playback_method
 
 
 def wait_for_new_recording(before_files, max_retries=3, retry_delay=2):
@@ -19,13 +16,10 @@ def wait_for_new_recording(before_files, max_retries=3, retry_delay=2):
         time.sleep(retry_delay)
         after_files = list_recordings()
         new_files = sorted(set(after_files) - set(before_files))
-
         if new_files:
             print(f"✅ Found {len(new_files)} new recording(s) after {attempt + 1} attempt(s)")
             return new_files
-
         print(f"⏳ Attempt {attempt + 1}/{max_retries}: No new recordings found, retrying...")
-
     return []
 
 
@@ -87,15 +81,9 @@ def run_excel_based_testing_mode():
                 duration = get_audio_duration(audio_file)
                 before = list_recordings()
 
-                print("🎙️ Starting recording...")
-                recorder.start(audio_file, playback_func)
-
-                wait_time = duration 
-                print(f"⏱️ Waiting {wait_time:.1f}s for playback...")
-                time.sleep(wait_time)
-
-                print("⏹️ Stopping recording...")
-                recorder.stop()
+                print("🎙️ Starting recording with Files app sync...")
+                # ✅ Pass recorder.stop as on_kill_callback
+                recorder.start(audio_file, lambda f: playback_func(f, on_kill_callback=recorder.stop))
 
                 print("💾 Waiting for recording to be saved...")
                 new_files = wait_for_new_recording(before)

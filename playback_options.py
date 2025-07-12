@@ -1,14 +1,15 @@
 # playback_options.py
+
 import os
 import time
 import subprocess
 import urllib.parse
 import wave
 import contextlib
-from tkinter import filedialog
+import glob
 
 FILES_APP_PACKAGE = "com.google.android.apps.nbu.files"
-FILES_TAP_X, FILES_TAP_Y = 221, 700  # Update if needed
+FILES_TAP_X, FILES_TAP_Y = 221, 700
 FILES_TARGET_FOLDER = "/sdcard/O6/"
 EXTRACTED_DIR = "extracted_audio"
 
@@ -25,7 +26,6 @@ def get_wav_duration(filepath):
         return frames / float(rate)
 
 def trim_audio_with_ffmpeg(input_path, output_path, start_time, duration):
-    import subprocess
     try:
         cmd = [
             "ffmpeg", "-y", "-i", input_path,
@@ -40,32 +40,32 @@ def trim_audio_with_ffmpeg(input_path, output_path, start_time, duration):
         print(f"FFmpeg error: {e}")
         return False
 
-def play_via_default_player(file_path):
-    """Launch default media player (e.g., YT Music)"""
+def play_via_default_player(file_path, on_kill_callback=None):
     filename = os.path.basename(file_path)
     device_path = f"/sdcard/{filename}"
     os.system(f"adb push \"{file_path}\" \"{device_path}\"")
     escaped_path = urllib.parse.quote(device_path)
     mime_type = get_mime_type(file_path)
+
     subprocess.run([
         "adb", "shell", "am", "start", "-a", "android.intent.action.VIEW",
         "-d", f"file://{escaped_path}", "-t", mime_type
     ], capture_output=True)
 
-def play_via_files_app(file_path):
-    """Launch , tap to play, kill after playback, then trim audio"""
-    import glob
+    duration = get_wav_duration(file_path)
+    time.sleep(duration + 1)
 
+    if on_kill_callback:
+        on_kill_callback()
+
+def play_via_files_app(file_path, on_kill_callback=None):
     def latest_recording_file():
         files = glob.glob("recordings/*.mp4")
-        if not files:
-            return None
-        return max(files, key=os.path.getmtime)
+        return max(files, key=os.path.getmtime) if files else None
 
     filename = os.path.basename(file_path)
     remote_path = f"{FILES_TARGET_FOLDER}{filename}"
 
-    # ✅ Push file
     subprocess.run(["adb", "push", file_path, FILES_TARGET_FOLDER], capture_output=True)
     adb(f'shell touch "{remote_path}"')
     adb(f'shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file://{remote_path}')
@@ -73,17 +73,15 @@ def play_via_files_app(file_path):
     duration = get_wav_duration(file_path)
     print(f"🎵 Duration: {duration:.2f}s")
 
-    # ✅ Start playback
     print("🚀 Launching Files app...")
     adb(f"shell monkey -p {FILES_APP_PACKAGE} 1")
     recording_start = time.time()
-    time.sleep(2.0)
+    time.sleep(2)
 
     print(f"👆 Sending tap at ({FILES_TAP_X},{FILES_TAP_Y})")
     adb(f"shell input tap {FILES_TAP_X} {FILES_TAP_Y}")
     tap_time = time.time()
 
-    # ✅ Wait then kill
     end_buffer = 1
     wait_time = duration + end_buffer
     print(f"⏳ Waiting {wait_time:.2f} seconds before killing Files app...")
@@ -91,9 +89,10 @@ def play_via_files_app(file_path):
 
     print("❌ Force-stopping Files app...")
     adb(f"shell am force-stop {FILES_APP_PACKAGE}")
-    recording_stop = time.time()
 
-    # ✅ Trim recording
+    if on_kill_callback:
+        on_kill_callback()
+
     try:
         recording_path = latest_recording_file()
         if not recording_path:
@@ -101,7 +100,6 @@ def play_via_files_app(file_path):
             return
 
         print(f"🎞️ Detected screen recording: {recording_path}")
-
         tap_delay = tap_time - recording_start
         trim_duration = duration + end_buffer
 
@@ -117,7 +115,6 @@ def play_via_files_app(file_path):
             print("❌ FFmpeg trimming failed.")
     except Exception as e:
         print(f"❌ Trimming error: {e}")
-
 
 def get_mime_type(file_path):
     ext = file_path.lower().split(".")[-1]

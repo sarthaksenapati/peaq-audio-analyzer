@@ -1,12 +1,11 @@
-# modes/folder_push_mode.py
-
-import os, time, urllib.parse, subprocess
+import os, time, subprocess
 from batch_processor import BatchProcessor
 from flawless_recorder import FlawlessRecorder
 from adb_controller import check_adb_connection, list_recordings, pull_recording
 from audio_utils import get_audio_duration
 from peaq_analyzer import run_peaq_analysis
 from playback_options import choose_playback_method  # ✅ Unified playback control
+
 
 def run_folder_push_batch_mode():
     print("🌀 Folder Push Batch Mode")
@@ -39,28 +38,30 @@ def run_folder_push_batch_mode():
 
         try:
             duration = get_audio_duration(audio_file)
-
             before = list_recordings()
 
-            # ✅ Use unified playback + trim logic
-            recorder.start(audio_file, playback_func)
-            time.sleep(duration)  # Let the recording run slightly longer than audio
-            recorder.stop()
+            print("🎙️ Starting recording with Files app sync...")
+            # ✅ Inject the stop function when Files app finishes
+            recorder.start(audio_file, lambda f: playback_func(f, on_kill_callback=recorder.stop))
 
-            after = list_recordings()
-            new_files = list(set(after) - set(before))
-            if not new_files:
+            print("💾 Waiting for recording to be saved...")
+            for attempt in range(3):
+                time.sleep(2)
+                after = list_recordings()
+                new_files = list(set(after) - set(before))
+                if new_files:
+                    break
+                print(f"⏳ Waiting for recording... attempt {attempt+1}")
+            else:
                 raise RuntimeError("No new recording found.")
 
             newest = sorted(new_files)[-1]
             pulled = pull_recording(newest)
 
-            # ✅ Save clean audio to ./extracted_audio/
             output_audio = os.path.join("extracted_audio", f"{base_name}_clean.wav")
             if not recorder.post_process(pulled, audio_file, output_audio):
                 raise RuntimeError("Post-processing failed.")
 
-            # ✅ Save graph and ODG to batch_results
             odg, quality = run_peaq_analysis(audio_file, output_audio, processor.graphs_folder)
             if odg is None:
                 raise RuntimeError("PEAQ analysis failed.")

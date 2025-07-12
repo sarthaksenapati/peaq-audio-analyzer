@@ -30,14 +30,19 @@ def run_single_mode():
     before = list_recordings()
 
     play_func = choose_playback_method()
+    print("🎙️ Starting recording...")
     recorder.start(audio_file, play_func)
 
-    wait_time = duration 
-    print(f"⏳ Waiting {wait_time:.1f}s for playback to finish...")
-    time.sleep(wait_time)
-
-    print("⏹️ Stopping recording...")
-    recorder.stop()
+    # ✅ No need to call play_func again manually here
+    if play_func.__name__ == "play_via_files_app":
+        print("⏹️ Stopping recording after Files app is killed...")
+        recorder.stop()
+    else:
+        wait_time = duration
+        print(f"⏳ Waiting {wait_time:.1f}s for playback to finish...")
+        time.sleep(wait_time)
+        print("⏹️ Stopping recording...")
+        recorder.stop()
 
     time.sleep(3)  # Let AZ Screen Recorder save the file
     after = list_recordings()
