@@ -1,5 +1,3 @@
-# playback_options.py
-
 import os
 import time
 import subprocess
@@ -41,22 +39,62 @@ def trim_audio_with_ffmpeg(input_path, output_path, start_time, duration):
         return False
 
 def play_via_default_player(file_path, on_kill_callback=None):
+    def latest_recording_file():
+        files = glob.glob("recordings/*.mp4")
+        return max(files, key=os.path.getmtime) if files else None
+
     filename = os.path.basename(file_path)
     device_path = f"/sdcard/{filename}"
     os.system(f"adb push \"{file_path}\" \"{device_path}\"")
     escaped_path = urllib.parse.quote(device_path)
     mime_type = get_mime_type(file_path)
 
+    duration = get_wav_duration(file_path)
+    print(f"🎵 Duration: {duration:.2f}s")
+
+    print("🚀 Launching default player...")
+    recording_start = time.time()
+
     subprocess.run([
         "adb", "shell", "am", "start", "-a", "android.intent.action.VIEW",
         "-d", f"file://{escaped_path}", "-t", mime_type
     ], capture_output=True)
 
-    duration = get_wav_duration(file_path)
-    time.sleep(duration + 1)
+    tap_time = time.time()
+    print(f"👆 Started playback at ~{tap_time - recording_start:.2f}s after recording started")
 
+    end_buffer = 1
+    wait_time = duration + end_buffer
+
+    # ✅ Trigger recorder.stop() *before* any post-processing
     if on_kill_callback:
+        print(f"⏹️ Stopping recording immediately after playback (~{wait_time:.2f}s)...")
+        time.sleep(wait_time)
         on_kill_callback()
+
+    try:
+        recording_path = latest_recording_file()
+        if not recording_path:
+            print("❌ No screen recording found to trim.")
+            return
+
+        print(f"🎞️ Detected screen recording: {recording_path}")
+        tap_delay = tap_time - recording_start
+        trim_duration = duration + end_buffer
+
+        base = os.path.splitext(filename)[0]
+        out_path = os.path.join(EXTRACTED_DIR, f"{base}_clean.wav")
+
+        print(f"✂️ Trimming from {tap_delay:.2f}s for {trim_duration:.2f}s...")
+        success = trim_audio_with_ffmpeg(recording_path, out_path, tap_delay, trim_duration)
+
+        if success:
+            print(f"✅ Clean audio saved: {out_path}")
+        else:
+            print("❌ FFmpeg trimming failed.")
+    except Exception as e:
+        print(f"❌ Trimming error: {e}")
+
 
 def play_via_files_app(file_path, on_kill_callback=None):
     def latest_recording_file():
