@@ -39,7 +39,7 @@ def run_manual_comparison_mode():
         return
 
     # ✅ Define the output folder BEFORE using it
-    graph_output_folder = os.path.join("outputs", "graphs")
+    graph_output_folder = "manual"
     os.makedirs(graph_output_folder, exist_ok=True)
 
     odg, quality = run_peaq_analysis(ref, test, graph_output_folder)
