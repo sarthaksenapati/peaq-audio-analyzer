@@ -72,3 +72,17 @@ def get_video_duration(video_path):
     except Exception as e:
         print(f"⚠️ Could not get video duration: {e}")
     return None
+
+# Add to bottom of flawless_recorder.py
+from aux_recorder import AuxRecorder
+
+def get_recorder():
+    print("\n🎙️ Select recording method:")
+    print("  [1] AZ Screen Recorder (Phone)")
+    print("  [2] AUX Cable Recording (PC)")
+
+    choice = input("> ").strip()
+    if choice == '2':
+        return AuxRecorder()
+    else:
+        return FlawlessRecorder()

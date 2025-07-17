@@ -1,7 +1,8 @@
 import time
 import os
 from adb_controller import check_adb_connection, push_audio, list_recordings, pull_recording
-from flawless_recorder import FlawlessRecorder
+from flawless_recorder import FlawlessRecorder, get_recorder
+from aux_recorder import AuxRecorder
 from peaq_analyzer import run_peaq_analysis
 from batch_processor import BatchProcessor
 from audio_utils import get_audio_duration
@@ -34,29 +35,37 @@ def process_single_file(file_path, recorder, processor, playback_func):
         print("📤 Pushing audio to device...")
         push_audio(file_path)
 
-        before_files = list_recordings()
-        print(f"📋 Initial recordings count: {len(before_files)}")
+        is_az = isinstance(recorder, FlawlessRecorder)
+        if is_az:
+            before_files = list_recordings()
 
         print("🎙️ Starting recording with Files app sync...")
         recorder.start(file_path, lambda f: playback_func(f, on_kill_callback=recorder.stop))
 
-        print("💾 Waiting for recording to be saved...")
-        new_files = wait_for_new_recording(before_files)
+        if is_az:
+            print("💾 Waiting for recording to be saved...")
+            new_files = wait_for_new_recording(before_files)
+            if not new_files:
+                raise Exception("No new recording found after multiple attempts")
+            latest_recording = new_files[-1]
+            print(f"📁 Latest recording: {latest_recording}")
+            print("📥 Pulling recording from device...")
+            pulled_file = pull_recording(latest_recording)
 
-        if not new_files:
-            raise Exception("No new recording found after multiple attempts")
-
-        latest_recording = new_files[-1]
-        print(f"📁 Latest recording: {latest_recording}")
-        print("📥 Pulling recording from device...")
-        pulled_file = pull_recording(latest_recording)
-
-        if not pulled_file or not os.path.exists(pulled_file):
-            raise Exception(f"Failed to pull recording: {pulled_file}")
+            if not pulled_file or not os.path.exists(pulled_file):
+                raise Exception(f"Failed to pull recording: {pulled_file}")
+        else:
+            print("⏳ Waiting for AUX recording to complete...")
+            recorder.stop()
+            pulled_file = None  # Not needed for AUX
 
         base_name = os.path.splitext(os.path.basename(file_path))[0]
-        output_clean = os.path.join("extracted_audio", f"{base_name}_clean.wav")
         os.makedirs("extracted_audio", exist_ok=True)
+        output_clean = os.path.join("extracted_audio", f"{base_name}_clean.wav")
+
+        # ✅ Handle duplicate filename if exists
+        if os.path.exists(output_clean):
+            os.remove(output_clean)
 
         print("🔧 Post-processing recording...")
         if not recorder.post_process(pulled_file, file_path, output_clean):
@@ -112,7 +121,20 @@ def run_batch_mode():
 
     print(f"📁 Selected {len(audio_files)} audio file(s)")
 
-    recorder = FlawlessRecorder()
+    # 📌 Ask user for recording method
+    print("\n🎙️ Select recording method:")
+    print("  [1] AZ Screen Recorder (Phone)")
+    print("  [2] AUX Cable Recording (PC)")
+    recorder_choice = input("> ").strip()
+
+    if recorder_choice == '2':
+        recorder = AuxRecorder()
+        if not recorder.prompt_and_set_device():
+            print("❌ Aborting: No valid AUX device selected.")
+            return
+    else:
+        recorder = FlawlessRecorder()
+
     processor = BatchProcessor()
     os.makedirs("extracted_audio", exist_ok=True)
     os.makedirs(processor.graphs_folder, exist_ok=True)

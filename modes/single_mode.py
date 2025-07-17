@@ -1,11 +1,10 @@
-# modes/single_mode.py
-
 import time
 import os
 import subprocess
 import urllib.parse
 from adb_controller import check_adb_connection, push_audio, list_recordings, pull_recording
-from flawless_recorder import FlawlessRecorder
+from flawless_recorder import get_recorder, FlawlessRecorder
+from aux_recorder import AuxRecorder  # ✅ Import AuxRecorder for isinstance check
 from peaq_analyzer import run_peaq_analysis
 from config import output_audio_dir
 from audio_utils import get_audio_duration
@@ -26,14 +25,30 @@ def run_single_mode():
 
     push_audio(audio_file)
 
-    recorder = FlawlessRecorder()
-    before = list_recordings()
+    recorder = get_recorder()
+    is_az = isinstance(recorder, FlawlessRecorder)
+
+    # ✅ Prompt for AUX input device only if needed
+    if isinstance(recorder, AuxRecorder):
+        recorder.prompt_and_set_device()
+
+    if is_az:
+        before = list_recordings()
 
     play_func = choose_playback_method()
     print("🎙️ Starting recording...")
     recorder.start(audio_file, play_func)
 
-    # ✅ No need to call play_func again manually here
+    if not is_az:  # AUX mode
+        print("⏳ Waiting for AUX recording to complete...")
+        recorder.stop()
+        output_clean = os.path.join(output_audio_dir, f"{os.path.splitext(os.path.basename(audio_file))[0]}_clean.wav")
+        if recorder.post_process(None, audio_file, output_clean):
+            odg, quality = run_peaq_analysis(audio_file, output_clean, "single")
+            print(f"\n🎯 ODG: {odg:.2f} | Quality: {quality}")
+        return
+
+    # AZ mode flow
     if play_func.__name__ == "play_via_files_app":
         print("⏹️ Stopping recording after Files app is killed...")
         recorder.stop()
@@ -44,7 +59,7 @@ def run_single_mode():
         print("⏹️ Stopping recording...")
         recorder.stop()
 
-    time.sleep(3)  # Let AZ Screen Recorder save the file
+    time.sleep(3)
     after = list_recordings()
     new_files = sorted(set(after) - set(before))
 
