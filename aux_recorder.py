@@ -58,43 +58,36 @@ class AuxRecorder:
             print("❌ No input device selected. Call prompt_and_set_device() first.")
             return
 
-        duration = get_audio_duration(audio_file) + 3.0  # 3s for initial silence
+        original_duration = get_audio_duration(audio_file)
+        buffer_seconds = 4.0  # Full raw buffer before/after
+        total_duration = original_duration + buffer_seconds
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         self.output_file = os.path.join(output_audio_dir, f"aux_recording_{timestamp}.wav")
 
-        print("\n🎙️ Starting recording and playbook...")
+        print("\n🎙️ Starting recording before playback...")
 
-        # Use an event to synchronize the start
         start_event = threading.Event()
 
         def record():
-            print(f"🎧 Preparing FFmpeg recording from '{self.selected_device}' for {duration:.2f} seconds...")
-            # Wait for the signal to start
+            print(f"🎧 Recording from '{self.selected_device}' for {total_duration:.2f} seconds...")
             start_event.wait()
-            
-            # Start recording immediately when signaled
             subprocess.run([
                 self.ffmpeg_path,
                 "-y",
                 "-f", "dshow",
                 "-i", f"audio={self.selected_device}",
-                "-t", str(duration),
+                "-t", str(total_duration),
                 self.output_file
             ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        # Start recording thread but keep it waiting
         record_thread = threading.Thread(target=record)
         record_thread.start()
-        
-        # Small delay to ensure recording thread is ready and waiting
-        time.sleep(0.1)
 
-        # Signal recording to start and immediately start playback
-        start_event.set()  # This triggers recording to start
-        play_func(audio_file)  # This starts playback immediately after
+        time.sleep(0.1)  # Let recording thread prepare
+        start_event.set()  # Begin recording now
+        play_func(audio_file)  # Trigger playback now (or after delay, up to mode)
 
-        # Wait for recording to finish
         record_thread.join()
 
     def stop(self):
@@ -107,35 +100,37 @@ class AuxRecorder:
 
         try:
             if os.path.exists(output_path):
-                os.remove(output_path)  # 💥 Remove old output first
-            
-            # Trim the first 3 seconds of silence from the recording
-            print("✂️ Trimming initial 3 seconds of silence...")
+                os.remove(output_path)
+
+            print("✂️ Precisely trimming based on known offset and duration...")
             temp_trimmed = self.output_file.replace(".wav", "_trimmed.wav")
-            
+
+            # Exact timing
+            delay_before_play = 3.0  # seconds to skip at beginning
+            duration = get_audio_duration(original_audio)
+
             trim_result = subprocess.run([
                 self.ffmpeg_path,
                 "-y",
                 "-i", self.output_file,
-                "-ss", "3",  # Skip first 3 seconds
-                "-c", "copy",  # Copy without re-encoding for speed
+                "-ss", str(delay_before_play),
+                "-t", f"{duration:.2f}",
+                "-c:a", "pcm_s16le",  # ensure uncompressed WAV
                 temp_trimmed
             ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            
+
             if trim_result.returncode == 0:
-                # Replace original with trimmed version
                 os.remove(self.output_file)
                 os.rename(temp_trimmed, output_path)
                 print(f"✅ AUX recording trimmed and saved: {output_path}")
                 return True
             else:
-                # Fallback to original if trimming fails
-                print("⚠️ Trimming failed, using original recording...")
+                print("⚠️ Trimming failed, using raw recording...")
                 os.rename(self.output_file, output_path)
                 if os.path.exists(temp_trimmed):
                     os.remove(temp_trimmed)
                 return True
-                
+
         except Exception as e:
             print(f"❌ Failed to process AUX recording to {output_path}")
             print("Error:", e)
