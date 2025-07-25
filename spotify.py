@@ -93,9 +93,24 @@ def main():
     input("[Ready] Open Spotify to the correct track and pause it. Press Enter to launch and start recording...")
     launch_spotify()
 
-    # Step 4: Start playback
-    print("[Spotify] Sending PLAY toggle (keyevent 85)...")
+    # Extra: Bring Spotify to foreground and wait longer
+    print("[Spotify] Bringing app to foreground and waiting...")
+    subprocess.run(["adb", "shell", "am", "start", "-n", "com.spotify.music/.MainActivity"])
+    time.sleep(4.0)
+
+    # Step 4: Try toggling playback (keyevent 85 toggles play/pause)
+    print("[Spotify] Sending TOGGLE PLAY/PAUSE (keyevent 85)...")
     adb("shell input keyevent 85")
+    time.sleep(1.5)
+    # Try again in case first one is missed
+    print("[Spotify] Sending TOGGLE PLAY/PAUSE (keyevent 85) again...")
+    adb("shell input keyevent 85")
+    time.sleep(1.0)
+    # Optional: Ask user to confirm playback started
+    confirm = input("Did playback start? (y/n): ").strip().lower()
+    if confirm != 'y':
+        print("Please manually press play in Spotify now, then press Enter to continue...")
+        input()
 
     # Step 5: Start recording with FFmpeg
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -112,8 +127,8 @@ def main():
     subprocess.run(ffmpeg_cmd)
     
     # Step 6: Stop Spotify and exit
-    print("[Spotify] Sending PAUSE (keyevent 127) and killing app...")
-    adb("shell input keyevent 127")
+    print("[Spotify] Sending TOGGLE PLAY/PAUSE (keyevent 85) and killing app...")
+    adb("shell input keyevent 85")
     subprocess.run(["adb", "shell", "am", "force-stop", SPOTIFY_PACKAGE])
 
     print(f"[Done] Recording complete: {output_path}")
