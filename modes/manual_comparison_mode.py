@@ -41,7 +41,7 @@ def run_manual_comparison_mode():
         print("Files must be different.")
         return
 
-    graph_output_folder = "manual"
+    graph_output_folder = "results/manual"
     os.makedirs(graph_output_folder, exist_ok=True)
 
     odg, quality = run_peaq_analysis(ref, test, graph_output_folder)

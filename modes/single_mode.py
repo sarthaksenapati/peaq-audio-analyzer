@@ -10,7 +10,7 @@ from audio_utils import get_audio_duration
 from file_manager import select_audio_files
 from playback_options import choose_playback_method
 
-os.makedirs("single", exist_ok=True)
+os.makedirs("results/single", exist_ok=True)
 
 def run_single_mode():
     print("🎧 Select an audio file to push and record...")
@@ -36,5 +36,5 @@ def run_single_mode():
 
     output_clean = os.path.join(output_audio_dir, f"{os.path.splitext(os.path.basename(audio_file))[0]}_clean.wav")
     if recorder.post_process(None, audio_file, output_clean):
-        odg, quality = run_peaq_analysis(audio_file, output_clean, "single")
+        odg, quality = run_peaq_analysis(audio_file, output_clean, "results/single")
         print(f"\n🎯 ODG: {odg:.2f} | Quality: {quality}")

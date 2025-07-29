@@ -13,8 +13,8 @@ def display_main_menu():
     print("  [3] Folder Push Mode (Folder-Push + Record + Analyze + Report)")
     print("  [4] Manual Comparison (Compares two files already available in the directory)")
     print("  [5] Excel-Driven Testing (Asks for Excel file with test cases and runs them)")
-    print("  [6] Spotify Record Mode (Batch Playlist Capture)")
-    print("  [7] Spotify Comparison Mode (Folder Matching)")
+    print("  [6] 3rd party Record Mode (records playlist from Spotify, Gaana, etc.)")
+    print("  [7] 3rd party Comparison Mode (compares two files from Spotify, Gaana, etc.)")
     return input("> ").strip()
 
 

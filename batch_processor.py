@@ -10,7 +10,7 @@ class BatchProcessor:
 
     def __init__(self):
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.batch_root = os.path.join("batch_results", f"batch_{timestamp}")
+        self.batch_root = os.path.join("results/batch_results", f"batch_{timestamp}")
         self.graphs_folder = os.path.join(self.batch_root, "graphs")
         os.makedirs(self.graphs_folder, exist_ok=True)
 

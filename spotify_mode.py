@@ -114,9 +114,9 @@ def main():
         app_package = "com.jio.media.jiobeats"
         adb("shell input keyevent 85")  # Toggle Play/Pause
     elif app_choice == '4':
-        launch_spotify()
+        from spotify_playback import launch_and_play_spotify_playlist
+        launch_and_play_spotify_playlist()
         app_package = "com.spotify.music"
-        adb("shell input keyevent 126")  # Play (works for Spotify)
     else:
         print("❌ Invalid choice. Defaulting to Audible.")
         launch_audible()

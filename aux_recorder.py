@@ -18,6 +18,7 @@ class AuxRecorder:
 
     def list_dshow_audio_devices(self):
         print("🔍 Scanning for available audio input devices...\n")
+        print(f"[DEBUG] Using ffmpeg at: {self.ffmpeg_path}")
         result = subprocess.run(
             [self.ffmpeg_path, "-list_devices", "true", "-f", "dshow", "-i", "dummy"],
             stderr=subprocess.PIPE,
@@ -71,6 +72,7 @@ class AuxRecorder:
 
         def record():
             print(f"🎧 Recording from '{self.selected_device}' for {total_duration:.2f} seconds...")
+            print(f"[DEBUG] Using ffmpeg at: {self.ffmpeg_path}")
             start_event.wait()
             subprocess.run([
                 self.ffmpeg_path,
@@ -109,6 +111,7 @@ class AuxRecorder:
             delay_before_play = 3.0  # seconds to skip at beginning
             duration = get_audio_duration(original_audio)
 
+            print(f"[DEBUG] Using ffmpeg at: {self.ffmpeg_path}")
             trim_result = subprocess.run([
                 self.ffmpeg_path,
                 "-y",

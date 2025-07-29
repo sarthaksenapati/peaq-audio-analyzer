@@ -26,7 +26,13 @@ def play_via_files_app(file_path, on_kill_callback=None):
     filename = os.path.basename(file_path)
     remote_path = f"{FILES_TARGET_FOLDER}{filename}"
 
+    print(f"🚚 Pushing file: {file_path} to {FILES_TARGET_FOLDER}")
+    push_start = time.time()
     subprocess.run(["adb", "push", file_path, FILES_TARGET_FOLDER], capture_output=True)
+    push_end = time.time()
+    push_duration = push_end - push_start
+    print(f"✅ File push took {push_duration:.2f} seconds.")
+
     adb(f'shell touch "{remote_path}"')
     adb(f'shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file://{remote_path}')
 
@@ -35,7 +41,11 @@ def play_via_files_app(file_path, on_kill_callback=None):
 
     print("🚀 Launching Files app...")
     adb(f"shell monkey -p {FILES_APP_PACKAGE} 1")
-    time.sleep(2)
+    # Wait time after launching Files app depends on file push duration and audio length
+    # Minimum 2 seconds, but add extra if push took longer
+    wait_after_launch = max(2, min(push_duration * 0.7, 8))  # 70% of push time, capped at 8s
+    print(f"⏳ Waiting {wait_after_launch:.2f} seconds before tapping...")
+    time.sleep(wait_after_launch)
 
     print(f"👆 Sending tap at ({FILES_TAP_X},{FILES_TAP_Y})")
     adb(f"shell input tap {FILES_TAP_X} {FILES_TAP_Y}")

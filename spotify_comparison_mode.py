@@ -16,8 +16,24 @@ def run_spotify_comparison_mode():
 
     processor = BatchProcessor()
 
+    # 📥 Ask user for file range to compare
+    range_input = input("Enter file range to compare (e.g., 2-37): ").strip()
+
+    try:
+        start_str, end_str = range_input.split('-')
+        start_idx = int(start_str) - 1  # convert to 0-based index
+        end_idx = int(end_str)
+    except Exception:
+        print("❌ Invalid format. Please use start-end (e.g., 2-37)")
+        return
+
     all_files = sorted(os.listdir(ref_folder))
-    for fname in all_files:
+    selected_files = all_files[start_idx:end_idx]
+
+    print(f"🔍 Comparing files {start_idx+1} to {end_idx} (total: {len(selected_files)})")
+
+    for fname in selected_files:
+
         ref_path = os.path.join(ref_folder, fname)
         test_path = os.path.join(test_folder, fname)
 
