@@ -6,7 +6,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font
 
 class BatchProcessor:
-    SUPPORTED_EXTENSIONS = ['.wav', '.mp3', '.flac', '.m4a', '.aac']
+    SUPPORTED_EXTENSIONS = ['.wav', '.mp3', '.flac', '.m4a', '.aac', '.ogg', '.opus', '.wma', '.webm', '.mid', '.mp4']
 
     def __init__(self):
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")

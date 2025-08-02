@@ -2,8 +2,11 @@
 
 import os
 
-# Supported audio extensions for general validation
-SUPPORTED_AUDIO_EXTENSIONS = {'.wav', '.mp3', '.m4a', '.aac', '.flac', '.ogg', '.wma', '.webm', '.opus'}
+# Expanded audio extensions to cover more formats
+SUPPORTED_AUDIO_EXTENSIONS = {
+    '.wav', '.mp3', '.m4a', '.aac', '.flac',
+    '.ogg', '.wma', '.webm', '.opus', '.mid', '.mp4'
+}
 
 def validate_audio_file(path):
     """Check if the file exists and has a supported audio extension."""

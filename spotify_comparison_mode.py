@@ -3,6 +3,8 @@ import traceback
 from batch_processor import BatchProcessor
 from wrapper_peaq import run_peaq_comparison
 from audio_utils import get_audio_duration
+from config import spotify_comparison_range  # new import
+
 
 def run_spotify_comparison_mode():
     print("📊 Spotify Comparison Mode – Folder Matching")
@@ -17,7 +19,9 @@ def run_spotify_comparison_mode():
     processor = BatchProcessor()
 
     # 📥 Ask user for file range to compare
-    range_input = input("Enter file range to compare (e.g., 2-37): ").strip()
+    range_input = spotify_comparison_range.strip()
+    print(f"📥 Using configured range from config: {range_input}")
+
 
     try:
         start_str, end_str = range_input.split('-')

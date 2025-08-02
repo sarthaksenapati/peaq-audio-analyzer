@@ -7,10 +7,16 @@ import subprocess
 import soundfile as sf
 
 
+from pydub import AudioSegment
+
 def get_audio_duration(file):
-    """Get duration of a WAV file in seconds"""
-    with wave.open(file, 'rb') as w:
-        return w.getnframes() / float(w.getframerate())
+    """
+    Get duration of any audio file (wav, mp3, m4a, aac, flac, etc.)
+    Requires FFmpeg to be installed and available in PATH.
+    """
+    audio = AudioSegment.from_file(file)
+    return len(audio) / 1000.0  # Duration in seconds
+
 
 
 def load_audio(path, target_sr=44100, mono=True):
@@ -71,29 +77,41 @@ def quick_quality_check(ref_path, test_path):
 
     return ref_bw - test_bw, test_rms / ref_rms
 
+def align_signals_by_cross_correlation(sig1, sig2, original_sr=44100, downsample_sr=8000):
+    """
+    Efficient alignment using downsampled cross-correlation for lag estimation,
+    but extracts aligned segments from original high-res signals.
+    """
+    # Step 1: Downsample for alignment
+    sig1_ds = librosa.resample(sig1, orig_sr=original_sr, target_sr=downsample_sr)
+    sig2_ds = librosa.resample(sig2, orig_sr=original_sr, target_sr=downsample_sr)
 
-def align_signals_by_cross_correlation(sig1, sig2):
-    """Reliable sample-level alignment using cross-correlation"""
-    corr = np.correlate(sig2, sig1, mode='full')
-    lag = np.argmax(corr) - len(sig1) + 1
-    print(f"📏 Detected offset (lag): {lag} samples")
+    # Step 2: Find lag
+    corr = np.correlate(sig2_ds, sig1_ds, mode='full')
+    lag_ds = np.argmax(corr) - len(sig1_ds) + 1
+    lag_orig = int(round(lag_ds * (original_sr / downsample_sr)))
 
-    if lag > 0:
-        aligned_sig2 = sig2[lag:]
-        aligned_sig1 = sig1[:len(aligned_sig2)]
-    elif lag < 0:
-        aligned_sig1 = sig1[-lag:]
-        aligned_sig2 = sig2[:len(aligned_sig1)]
+    print(f"⚡ Fast cross-correlation lag: {lag_ds} samples @ {downsample_sr}Hz → {lag_orig} samples @ 44.1kHz")
+
+    # Step 3: Align original full-res signals
+    if lag_orig > 0:
+        sig2_aligned = sig2[lag_orig:]
+        sig1_aligned = sig1[:len(sig2_aligned)]
+    elif lag_orig < 0:
+        sig1_aligned = sig1[-lag_orig:]
+        sig2_aligned = sig2[:len(sig1_aligned)]
     else:
-        aligned_sig1 = sig1
-        aligned_sig2 = sig2
+        sig1_aligned = sig1
+        sig2_aligned = sig2
 
-    min_len = min(len(aligned_sig1), len(aligned_sig2))
-    aligned_sig1 = aligned_sig1[:min_len]
-    aligned_sig2 = aligned_sig2[:min_len]
+    # Step 4: Truncate to same length
+    min_len = min(len(sig1_aligned), len(sig2_aligned))
+    sig1_aligned = sig1_aligned[:min_len]
+    sig2_aligned = sig2_aligned[:min_len]
 
-    print(f"✅ Final aligned length: {min_len} samples")
-    return aligned_sig1, aligned_sig2, lag
+    print(f"✅ Aligned signals length: {min_len} samples ({min_len/original_sr:.2f} sec)")
+
+    return sig1_aligned, sig2_aligned, lag_orig
 
 
 def trim_audio_with_ffmpeg(input_path, output_path, start_sec, duration_sec):

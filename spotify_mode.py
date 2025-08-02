@@ -1,25 +1,27 @@
+# spotify_mode.py
 import os
-import tkinter as tk
-from tkinter import filedialog
-import pandas as pd
+import shutil
 import subprocess
 from datetime import datetime
-from trim_utils import split_audio_by_durations  # make sure this exists
-from spotify import list_audio_input_devices, launch_spotify, adb, launch_gaana, launch_jiosaavn, launch_audible
+import pandas as pd
+
+from trim_utils import split_audio_by_durations
+from spotify import (
+    list_audio_input_devices,
+    adb,
+    launch_gaana,
+    launch_jiosaavn,
+    launch_audible
+)
+
+from config import (
+    excel_path,
+    recording_phone,
+    selected_audio_device,
+    playback_app
+)
 
 
-# 📁 Ask user to select Excel file using GUI
-def select_excel_file():
-    root = tk.Tk()
-    root.withdraw()
-    file_path = filedialog.askopenfilename(
-        title="Select Excel File",
-        filetypes=[("Excel Files", "*.xlsx *.xls")]
-    )
-    return file_path
-
-
-# 🧠 Robustly parse duration formats
 def parse_duration(duration_str):
     if isinstance(duration_str, str) and ':' in duration_str:
         try:
@@ -33,7 +35,6 @@ def parse_duration(duration_str):
         return None
 
 
-# ⏱ Sum total track durations from Excel
 def calculate_total_duration_from_excel(excel_path):
     df = pd.read_excel(excel_path)
     if "duration" not in df.columns:
@@ -56,7 +57,7 @@ def record_audio(device_name, total_duration_sec, output_path):
     duration_with_buffer = total_duration_sec + 1
     ffmpeg_cmd = [
         "ffmpeg",
-        "-y",  # Overwrite output file without asking
+        "-y",
         "-f", "dshow",
         "-i", f"audio={device_name}",
         "-t", str(duration_with_buffer),
@@ -68,81 +69,77 @@ def record_audio(device_name, total_duration_sec, output_path):
 def main():
     print("🎵 Spotify RECORD MODE: Batch Playlist Capture")
 
-    # Step 1: Select Excel file with durations
-    excel_path = select_excel_file()
-    if not excel_path:
-        print("❌ No file selected. Exiting.")
+    # Step 1: Validate Excel file
+    if not os.path.isfile(excel_path):
+        print(f"❌ Excel file not found at: {excel_path}")
         return
-    print(f"📄 Selected Excel: {excel_path}")
+    print(f"📄 Using Excel from config: {excel_path}")
 
-    # Step 2: Sum durations
+    # Step 2: Calculate total recording duration
     total_duration = calculate_total_duration_from_excel(excel_path)
     print(f"⏱ Total Duration to Record: {total_duration} seconds")
 
-    # Step 3: Select audio input device
+    # Step 3: Validate audio input device
     devices = list_audio_input_devices()
-    print("\n🎤 Available Audio Devices:")
-    for idx, name in enumerate(devices):
-        print(f"[{idx}] {name}")
-    selected = int(input("Select device index to use: "))
-    device_name = devices[selected]
+    if selected_audio_device not in devices:
+        print(f"❌ Audio device '{selected_audio_device}' not found. Available:")
+        for d in devices:
+            print(f" - {d}")
+        return
+    print(f"🎤 Using audio device: {selected_audio_device}")
 
     # Step 4: Prepare recording
-    phone = input("Which phone is this recording for? (phone1/phone2): ").strip().lower()
+    phone = recording_phone.strip().lower()
     output_filename = f"{phone}_spotify_raw.wav"
     print(f"💾 Recording will be saved to: {output_filename}")
 
+    # Step 5: Launch the correct app
+    app_choice = playback_app.strip().lower()
+    print(f"📱 Using playback app from config: {app_choice}")
+    print("⏳ Load playlist and pause it manually. Press Enter when ready.")
+    input("▶️ Press Enter to begin recording...")
 
-    # Step 5: Let user select which app to launch
-    print("\nSelect the app to launch for playback:")
-    print("  [1] Audible")
-    print("  [2] Gaana")
-    print("  [3] JioSaavn")
-    print("  [4] Spotify")
-    app_choice = input("Enter choice (1-4): ").strip()
-    input("📱 Load the selected app to the start of the playlist and pause. Press Enter to start...")
-    if app_choice == '1':
+    if app_choice == 'audible':
         launch_audible()
         app_package = "com.audible.application"
-        adb("shell input keyevent 85")  # Toggle Play/Pause
-    elif app_choice == '2':
+        adb("shell input keyevent 126")
+    elif app_choice == 'gaana':
         launch_gaana()
         app_package = "com.gaana"
-        adb("shell input keyevent 85")  # Toggle Play/Pause
-    elif app_choice == '3':
+        adb("shell input keyevent 85")
+    elif app_choice == 'jiosaavn':
         launch_jiosaavn()
         app_package = "com.jio.media.jiobeats"
-        adb("shell input keyevent 85")  # Toggle Play/Pause
-    elif app_choice == '4':
+        adb("shell input keyevent 85")
+    elif app_choice == 'spotify':
         from spotify_playback import launch_and_play_spotify_playlist
         launch_and_play_spotify_playlist()
         app_package = "com.spotify.music"
     else:
-        print("❌ Invalid choice. Defaulting to Audible.")
+        print("⚠️ Invalid app in config. Defaulting to Audible.")
         launch_audible()
         app_package = "com.audible.application"
-        adb("shell input keyevent 85")  # Toggle Play/Pause
+        adb("shell input keyevent 85")
 
     # Step 6: Record
     print("🎙 Recording started...")
-    record_audio(device_name, total_duration, output_filename)
+    record_audio(selected_audio_device, total_duration, output_filename)
 
-    # Step 7: Kill selected app
+    # Step 7: Stop playback app
     if app_package == "com.spotify.music":
-        adb("shell input keyevent 127")  # Pause (works for Spotify)
+        adb("shell input keyevent 127")
     else:
-        adb("shell input keyevent 85")  # Toggle Play/Pause
+        adb("shell input keyevent 85")
     subprocess.run(["adb", "shell", "am", "force-stop", app_package])
     print(f"🛑 {app_package} stopped. Recording complete.")
 
-    # Step 8: Split
+    # Step 8: Split long recording into individual tracks
     print("✂️ Splitting long recording into individual tracks...")
     split_output_folder = f"{phone}_tracks"
-    # Remove existing folder and its contents if it exists
     if os.path.exists(split_output_folder):
-        import shutil
         shutil.rmtree(split_output_folder)
     os.makedirs(split_output_folder, exist_ok=True)
+
     split_audio_by_durations(
         input_audio=output_filename,
         excel_path=excel_path,

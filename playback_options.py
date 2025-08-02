@@ -1,16 +1,14 @@
 from file_manager_playback import play_via_files_app
 from yt_music_playback import play_via_yt_music
+from config import playback_method  # <-- new import
 
 def choose_playback_method():
-    print("\n🎛️ Choose playback method:")
-    print("1. Files app (tap-based)")
-    print("2. YT Music (intent-based)")
-    choice = input("Enter 1 or 2: ")
-
-    if choice == "1":
+    if playback_method.lower() == "files":
+        print("✅ Using Files app for playback.")
         return play_via_files_app
-    elif choice == "2":
+    elif playback_method.lower() == "ytmusic":
+        print("✅ Using YouTube Music for playback.")
         return play_via_yt_music
     else:
-        print("Invalid choice. Defaulting to YT Music.")
+        print(f"⚠️ Invalid playback_method '{playback_method}' in config. Defaulting to YT Music.")
         return play_via_yt_music

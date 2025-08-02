@@ -1,44 +1,49 @@
 # modes/manual_comparison_mode.py
 
-import glob
+import os
+from tkinter import Tk, filedialog
 from audio_utils import get_audio_duration
 from peaq_analyzer import run_peaq_analysis
-import os
 
 def run_manual_comparison_mode():
-    print("Manual Comparison Mode")
+    print("🎧 Manual Comparison Mode")
 
-    # ✅ List of common formats — can add more as needed
-    all_files = []
-    extensions = ['*.wav', '*.mp3', '*.flac', '*.m4a', '*.aac', '*.ogg', '*.opus', '*.wma']
-    for ext in extensions:
-        all_files.extend(glob.glob(ext))
-        all_files.extend(glob.glob(ext.upper()))
+    # Set up hidden Tkinter root window for file dialog
+    root = Tk()
+    root.withdraw()  # Hide the main window
 
-    if len(all_files) < 2:
-        print("Need at least 2 audio files.")
+    # Prompt user to select reference and test audio files
+    print("\n📂 Select the REFERENCE audio file:")
+    ref = filedialog.askopenfilename(
+        title="Select Reference File",
+        filetypes=[("Audio files", "*.wav *.mp3 *.flac *.m4a *.aac *.ogg *.opus *.wma")]
+    )
+
+    if not ref:
+        print("❌ Reference file selection cancelled.")
         return
 
-    for i, f in enumerate(all_files, 1):
-        try:
-            dur = get_audio_duration(f)
-            print(f"  [{i}] {f} ({dur:.2f}s)")
-        except:
-            print(f"  [{i}] {f} (unknown or unreadable)")
+    print("\n📂 Select the TEST audio file:")
+    test = filedialog.askopenfilename(
+        title="Select Test File",
+        filetypes=[("Audio files", "*.wav *.mp3 *.flac *.m4a *.aac *.ogg *.opus *.wma")]
+    )
 
-    def pick(msg):
-        while True:
-            try:
-                i = int(input(msg)) - 1
-                if 0 <= i < len(all_files): return all_files[i]
-                print("Try again.")
-            except:
-                print("Invalid input.")
+    if not test:
+        print("❌ Test file selection cancelled.")
+        return
 
-    ref = pick("\nSelect REFERENCE file number: ")
-    test = pick("Select TEST file number: ")
     if ref == test:
-        print("Files must be different.")
+        print("❌ Reference and Test files must be different.")
+        return
+
+    try:
+        ref_dur = get_audio_duration(ref)
+        test_dur = get_audio_duration(test)
+        print(f"\n✅ Reference: {os.path.basename(ref)} ({ref_dur:.2f}s)")
+        print(f"✅ Test     : {os.path.basename(test)} ({test_dur:.2f}s)")
+    except Exception as e:
+        print(f"⚠️ Error reading durations: {e}")
         return
 
     graph_output_folder = "results/manual"

@@ -3,20 +3,7 @@ from modes.batch_mode import run_batch_mode
 from modes.folder_push_mode import run_folder_push_batch_mode
 from modes.manual_comparison_mode import run_manual_comparison_mode
 from modes.excel_mode import run_excel_based_testing_mode
-
-def display_main_menu():
-    print("\n🎬 Flawless Audio Capture + PEAQ Analyzer")
-    print("=" * 60)
-    print("Choose a mode:")
-    print("  [1] Single File Mode (1 File-Push + Record + Analyze + Report)")
-    print("  [2] Batch Mode (Multiple File-Push + Record + Analyze + Report)(Select Files)")
-    print("  [3] Folder Push Mode (Folder-Push + Record + Analyze + Report)")
-    print("  [4] Manual Comparison (Compares two files already available in the directory)")
-    print("  [5] Excel-Driven Testing (Asks for Excel file with test cases and runs them)")
-    print("  [6] 3rd party Record Mode (records playlist from Spotify, Gaana, etc.)")
-    print("  [7] 3rd party Comparison Mode (compares two files from Spotify, Gaana, etc.)")
-    return input("> ").strip()
-
+from config import selected_mode  # <-- imported here
 
 def route_user(choice):
     match choice:
@@ -33,3 +20,6 @@ def route_user(choice):
             run_spotify_comparison_mode()
         case _:
             print("❌ Invalid choice. Please select 1–7.")
+
+# call the router directly with config value
+route_user(selected_mode)

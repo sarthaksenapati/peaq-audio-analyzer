@@ -6,7 +6,7 @@ import threading
 import time
 
 from audio_utils import get_audio_duration
-from config import output_audio_dir
+from config import output_audio_dir, selected_audio_device  # Add selected_audio_device import
 
 class AuxRecorder:
     def __init__(self, ffmpeg_path="ffmpeg"):
@@ -42,17 +42,16 @@ class AuxRecorder:
             print("❌ No audio input devices found. Make sure 'Stereo Mix' or 'Line In' is enabled.")
             return False
 
-        print("\n🎤 Available Audio Devices:")
-        for i, dev in enumerate(devices):
-            print(f"[{i}] {dev}")
-
-        try:
-            index = int(input("\nSelect device index to use: "))
-            self.selected_device = devices[index]
+        if selected_audio_device in devices:
+            self.selected_device = selected_audio_device
+            print(f"✅ Using configured audio device: {self.selected_device}")
             return True
-        except (ValueError, IndexError):
-            print("❌ Invalid selection.")
+        else:
+            print(f"❌ Configured device '{selected_audio_device}' not found among available devices:")
+            for dev in devices:
+                print(f" - {dev}")
             return False
+
 
     def start(self, audio_file, play_func):
         if not self.selected_device:

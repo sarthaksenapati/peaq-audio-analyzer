@@ -5,9 +5,9 @@ import time
 def adb_prefix(adb_serial):
     return f"adb -s {adb_serial}" if adb_serial else "adb"
 
-def launch_spotify(adb_serial=None):
-    print("Launching Spotify app...")
-    cmd = f"{adb_prefix(adb_serial)} shell monkey -p com.spotify.music -c android.intent.category.LAUNCHER 1"
+def launch_jiosaavn(adb_serial=None):
+    print("Launching JioSaavn app...")
+    cmd = f"{adb_prefix(adb_serial)} shell monkey -p com.jio.media.jiobeats -c android.intent.category.LAUNCHER 1"
     os.system(cmd)
     time.sleep(4)
 
@@ -29,25 +29,6 @@ def find_text_bounds(xml_file, target_text=None, resource_id=None, content_desc=
             return (x1 + x2) // 2, (y1 + y2) // 2
     return None
 
-def find_shuffle_play_button(xml_file):
-    tree = ET.parse(xml_file)
-    root = tree.getroot()
-    for node in root.iter('node'):
-        node_class = node.attrib.get('class', '')
-        content_desc = node.attrib.get('content-desc', '')
-        clickable = node.attrib.get('clickable') == 'true'
-        bounds = node.attrib.get('bounds')
-        if (
-            node_class == 'android.widget.Button'
-            and content_desc == 'Play playlist'
-            and clickable
-            and bounds
-        ):
-            x1, y1 = map(int, bounds.split('][')[0][1:].split(','))
-            x2, y2 = map(int, bounds.split('][')[1][:-1].split(','))
-            return (x1 + x2) // 2, (y1 + y2) // 2
-    return None
-
 def tap_by_text(text, adb_serial=None):
     os.system(f"{adb_prefix(adb_serial)} shell uiautomator dump /sdcard/ui.xml")
     os.system(f"{adb_prefix(adb_serial)} pull /sdcard/ui.xml .")
@@ -59,28 +40,51 @@ def tap_by_text(text, adb_serial=None):
     else:
         print(f"Text '{text}' not found on screen.")
 
-def tap_play_button(adb_serial=None):
+def tap_play_button_jiosaavn(adb_serial=None):
+    import math
     os.system(f"{adb_prefix(adb_serial)} shell uiautomator dump /sdcard/ui.xml")
     os.system(f"{adb_prefix(adb_serial)} pull /sdcard/ui.xml .")
-    coords = find_shuffle_play_button('ui.xml')
+    # Try by resource-id first
+    coords = find_text_bounds('ui.xml', resource_id="com.jio.media.jiobeats:id/2131362155")
     if coords:
         x, y = coords
-        print(f"Tapping green Shuffle Play button at ({x},{y})")
+        print(f"Tapping blue Play button at ({x},{y})")
         os.system(f"{adb_prefix(adb_serial)} shell input tap {x} {y}")
         return
-    coords = find_text_bounds('ui.xml', resource_id="com.spotify.music:id/play_pause_button")
-    if not coords:
-        coords = find_text_bounds('ui.xml', content_desc="Play")
-    if coords:
-        x, y = coords
-        print(f"Tapping Play button at ({x},{y})")
+
+    # Fallback: find clickable android.view.View closest to (942,906)
+    tree = ET.parse('ui.xml')
+    root = tree.getroot()
+    target_x, target_y = 942, 906
+    min_dist = float('inf')
+    best_coords = None
+    best_bounds = None
+    for node in root.iter('node'):
+        if node.attrib.get('class') == 'android.view.View' and node.attrib.get('clickable') == 'true':
+            bounds = node.attrib.get('bounds')
+            if bounds:
+                x1, y1 = map(int, bounds.split('][')[0][1:].split(','))
+                x2, y2 = map(int, bounds.split('][')[1][:-1].split(','))
+                cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+                dist = math.hypot(cx - target_x, cy - target_y)
+                if dist < min_dist:
+                    min_dist = dist
+                    best_coords = (cx, cy)
+                    best_bounds = bounds
+    if best_coords:
+        x, y = best_coords
+        print(f"Tapping play button (class=android.view.View, clickable, bounds={best_bounds}) at ({x},{y})")
         os.system(f"{adb_prefix(adb_serial)} shell input tap {x} {y}")
     else:
-        print("Play button not found by resource-id or content-desc. Trying keyevent 126...")
+        print("Play button not found robustly, trying keyevent 126...")
         os.system(f"{adb_prefix(adb_serial)} shell input keyevent 126")
 
-def launch_and_play_spotify_playlist(adb_serial=None):
-    launch_spotify(adb_serial=adb_serial)
-    tap_by_text("Your Library", adb_serial=adb_serial)
-    tap_by_text("Liked Songs", adb_serial=adb_serial)  # or whatever playlist name works
-    tap_play_button(adb_serial=adb_serial)
+def launch_and_play_jiosaavn_playlist(adb_serial=None):
+    launch_jiosaavn(adb_serial=adb_serial)
+    tap_by_text("My Library", adb_serial=adb_serial)
+    tap_by_text("Playlists", adb_serial=adb_serial)
+    tap_by_text("random", adb_serial=adb_serial)
+    tap_play_button_jiosaavn(adb_serial=adb_serial)
+
+if __name__ == "__main__":
+    launch_and_play_jiosaavn_playlist()

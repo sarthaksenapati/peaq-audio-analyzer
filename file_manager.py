@@ -1,10 +1,8 @@
-# file_manager.py
-
 import os
 from tkinter import Tk, filedialog
 
-# ✅ List of common audio formats supported by FFmpeg
-SUPPORTED_AUDIO_EXTENSIONS = "*.wav *.mp3 *.m4a *.flac *.aac *.ogg *.opus"
+# ✅ Expanded list of audio formats, including mid, mp4, wma
+SUPPORTED_AUDIO_EXTENSIONS = "*.wav *.mp3 *.m4a *.flac *.aac *.ogg *.opus *.wma *.webm *.mid *.mp4"
 
 def select_audio_files():
     root = Tk()
