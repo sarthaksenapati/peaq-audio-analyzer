@@ -8,7 +8,7 @@ import pandas as pd
 from trim_utils import split_audio_by_durations
 from spotify import (
     list_audio_input_devices,
-    adb,
+    adb, 
     launch_gaana,
     launch_jiosaavn,
     launch_audible
@@ -66,7 +66,7 @@ def record_audio(device_name, total_duration_sec, output_path):
     subprocess.run(ffmpeg_cmd)
 
 
-def main():
+def main(phone_label, audio_device, app_choice, adb_serial):
     print("🎵 Spotify RECORD MODE: Batch Playlist Capture")
 
     # Step 1: Validate Excel file
@@ -81,21 +81,19 @@ def main():
 
     # Step 3: Validate audio input device
     devices = list_audio_input_devices()
-    if selected_audio_device not in devices:
-        print(f"❌ Audio device '{selected_audio_device}' not found. Available:")
+    if audio_device not in devices:
+        print(f"❌ Audio device '{audio_device}' not found. Available:")
         for d in devices:
             print(f" - {d}")
         return
-    print(f"🎤 Using audio device: {selected_audio_device}")
+    print(f"🎤 Using audio device: {audio_device}")
 
     # Step 4: Prepare recording
-    phone = recording_phone.strip().lower()
-    output_filename = f"{phone}_spotify_raw.wav"
+    output_filename = f"{phone_label}_spotify_raw.wav"
     print(f"💾 Recording will be saved to: {output_filename}")
 
     # Step 5: Launch the correct app
-    app_choice = playback_app.strip().lower()
-    print(f"📱 Using playback app from config: {app_choice}")
+    print(f"📱 Using playback app: {app_choice}")
     print("⏳ Load playlist and pause it manually. Press Enter when ready.")
     input("▶️ Press Enter to begin recording...")
 
@@ -116,14 +114,14 @@ def main():
         launch_and_play_spotify_playlist()
         app_package = "com.spotify.music"
     else:
-        print("⚠️ Invalid app in config. Defaulting to Audible.")
+        print("⚠️ Invalid app. Defaulting to Audible.")
         launch_audible()
         app_package = "com.audible.application"
         adb("shell input keyevent 85")
 
     # Step 6: Record
     print("🎙 Recording started...")
-    record_audio(selected_audio_device, total_duration, output_filename)
+    record_audio(audio_device, total_duration, output_filename)
 
     # Step 7: Stop playback app
     if app_package == "com.spotify.music":
@@ -135,7 +133,7 @@ def main():
 
     # Step 8: Split long recording into individual tracks
     print("✂️ Splitting long recording into individual tracks...")
-    split_output_folder = f"{phone}_tracks"
+    split_output_folder = f"{phone_label}_tracks"
     if os.path.exists(split_output_folder):
         shutil.rmtree(split_output_folder)
     os.makedirs(split_output_folder, exist_ok=True)
@@ -150,4 +148,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # For standalone execution, you can provide default values or prompt for input
+    main("phone1", "default_audio_device", "spotify", "default_serial")

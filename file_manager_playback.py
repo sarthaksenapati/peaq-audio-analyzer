@@ -1,14 +1,35 @@
 import os
 import time
 import subprocess
+import shutil  # <-- add at top
 
 FILES_APP_PACKAGE = "com.google.android.apps.nbu.files"
 FILES_TAP_X, FILES_TAP_Y = 221, 700
 FILES_TARGET_FOLDER = "/sdcard/O6/"
 
+import shlex  # <-- add at top
+
 def adb(cmd):
-    result = subprocess.run(["adb"] + cmd.split(), capture_output=True, text=True)
+    # Use shlex.split to preserve quoted strings with spaces
+    result = subprocess.run(["adb"] + shlex.split(cmd), capture_output=True, text=True)
     return result.stdout.strip() + result.stderr.strip()
+
+def adb_safe(command_parts):
+    """Safe ADB command execution with parameter validation"""
+    if isinstance(command_parts, str):
+        command_parts = [command_parts]
+    
+    # Validate ADB availability
+    if not shutil.which("adb"):
+        raise RuntimeError("❌ ADB not found. Please install Android SDK Platform Tools.")
+    
+    try:
+        result = subprocess.run(["adb"] + command_parts, 
+                              capture_output=True, text=True, timeout=30)
+        return result.stdout.strip(), result.stderr.strip(), result.returncode
+    except subprocess.TimeoutExpired:
+        print("❌ ADB command timed out")
+        return "", "Timeout", 1
 
 def get_audio_duration(filepath):
     try:

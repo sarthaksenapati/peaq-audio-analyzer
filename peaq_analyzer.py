@@ -4,6 +4,7 @@ import numpy as np
 from PEAQ import PEAQ
 from audio_utils import load_audio, align_signals_by_cross_correlation
 from utils.plotting_utils import plot_peaq_results
+import config
 
 
 def run_peaq_analysis(ref_path, test_path, graph_output_folder):
@@ -19,17 +20,34 @@ def run_peaq_analysis(ref_path, test_path, graph_output_folder):
         print(f"📁 Test: {test_path}")
         print(f"📐 Original lengths — ref: {len(ref)}, test: {len(test)}")
 
-        min_len_before = min(len(ref), len(test))
-        diff_before = np.mean(np.abs(ref[:min_len_before] - test[:min_len_before]))
-        print(f"🔍 Signal difference BEFORE alignment: {diff_before:.6f}")
+        # Apply sample-level delay compensation BEFORE any other processing
+        if (hasattr(config, 'ENABLE_AUTO_DELAY_COMPENSATION') and 
+            config.ENABLE_AUTO_DELAY_COMPENSATION and
+            hasattr(config, 'SAMPLE_DELAY_COMPENSATION')):
+            
+            delay_samples = config.SAMPLE_DELAY_COMPENSATION
+            print(f"🔧 Applying {delay_samples} sample delay compensation ({delay_samples/ref_sr*1000:.1f}ms)")
+            
+            # Trim the delay from the test signal
+            if len(test) > delay_samples:
+                test = test[delay_samples:]
+                print(f"✂️ Test signal trimmed by {delay_samples} samples")
+            else:
+                print("⚠️ Test signal too short for delay compensation")
 
-        # ✅ Use your proven waveform-level cross-correlation
-        ref, test, lag = align_signals_by_cross_correlation(ref, test)
+        # Ensure both signals are the same length after delay compensation
+        min_len = min(len(ref), len(test))
+        ref = ref[:min_len]
+        test = test[:min_len]
+        
+        print(f"📐 Final aligned lengths — ref: {len(ref)}, test: {len(test)}")
 
+        # Calculate signal difference after sample-level alignment
         diff_after = np.mean(np.abs(ref - test))
-        print(f"🧭 Aligned signals by shifting by {lag / ref_sr:.3f} seconds")
-        print(f"📐 Aligned lengths — ref: {len(ref)}, test: {len(test)}")
-        print(f"🔍 Signal difference AFTER alignment: {diff_after:.6f}")
+        print(f"🔍 Signal difference after sample-level alignment: {diff_after:.6f}")
+
+        # Skip cross-correlation alignment since we've done sample-level alignment
+        print("🚫 Skipping cross-correlation alignment (using sample-level compensation)")
 
         if len(ref) < 1024 or len(test) < 1024:
             raise ValueError("Signals too short for PEAQ analysis")
@@ -61,13 +79,13 @@ def run_peaq_analysis(ref_path, test_path, graph_output_folder):
 
 
 def classify_quality(odg):
-    if odg >= -0.5:
+    if odg >= -1.0:
         return "Excellent"
-    elif odg >= -1.5:
+    elif odg >= -2.0:
         return "Good"
-    elif odg >= -2.5:
-        return "Satisfactory"
     elif odg >= -3.0:
+        return "Fair"
+    elif odg >= -4.0:
         return "Poor"
     else:
         return "Bad"

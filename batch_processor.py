@@ -94,10 +94,14 @@ class BatchProcessor:
 
         print(f"📤 Pushing folder to device: {local_folder} → {target_path}")
         try:
-            subprocess.run(["adb", "shell", f"mkdir -p \"{target_path}\""], check=True)
+            # Changed here: split mkdir into separate arguments instead of using quotes inside a single string
+            subprocess.run(["adb", "shell", "mkdir", "-p", target_path], check=True)
+            
+            # This line is fine as it was, Python handles spaces in local_folder and target_path
             subprocess.run(["adb", "push", local_folder, target_path], check=True)
             print("✅ Folder pushed successfully.")
             return True
         except subprocess.CalledProcessError as e:
             print(f"❌ ADB push failed: {e}")
             return None
+

@@ -1,5 +1,6 @@
 import os
 import time
+import threading
 import subprocess
 from batch_processor import BatchProcessor
 from aux_recorder import AuxRecorder
@@ -7,10 +8,11 @@ from adb_controller import check_adb_connection, push_audio
 from audio_utils import get_audio_duration
 from peaq_analyzer import run_peaq_analysis
 from playback_options import choose_playback_method
-
+import matplotlib
+matplotlib.use('Agg')  # ✅ Safe for threads; no GUI dependencies
 
 def run_folder_push_batch_mode():
-    print("🌀 Folder Push Batch Mode")
+    print("🔀 Folder Push Batch Mode")
 
     if not check_adb_connection():
         return
@@ -34,26 +36,17 @@ def run_folder_push_batch_mode():
         return
 
     playback_func = choose_playback_method()
+    os.makedirs("extracted_audio", exist_ok=True)
+    os.makedirs("temp_converted", exist_ok=True)
 
-    for audio_file in audio_files:
-        start_time = time.time()
-        base_name = os.path.splitext(os.path.basename(audio_file))[0]
+    total_start_time = time.time()
+    analysis_thread = None
 
-        try:
-            # 🔁 Convert to WAV if needed
-            if not audio_file.lower().endswith(".wav"):
-                converted_path = os.path.join("temp_converted", f"{base_name}.wav")
-                os.makedirs("temp_converted", exist_ok=True)
-                subprocess.run([
-                    "ffmpeg", "-y", "-i", audio_file,
-                    "-ar", "44100", "-ac", "2", converted_path
-                ], capture_output=True)
-                audio_input = converted_path
-            else:
-                audio_input = audio_file
+    for i, audio_file in enumerate(audio_files):
+        def push_and_record(path):
+            audio_input = path  # No conversion
 
             duration = get_audio_duration(audio_input)
-
             push_audio(audio_input)
 
             print("🎙️ Starting recording with Files app sync...")
@@ -61,34 +54,48 @@ def run_folder_push_batch_mode():
 
             print("⏳ Waiting for AUX recording to complete...")
             recorder.stop()
+            return audio_input
 
-            output_clean = os.path.join("extracted_audio", f"{base_name}_clean.wav")
-            os.makedirs("extracted_audio", exist_ok=True)
-
+        def run_analysis(audio_input):
+            base_name = os.path.basename(audio_input)
+            clean_name = os.path.splitext(base_name)[0]
+            output_clean = os.path.join("extracted_audio", f"{clean_name}_clean.wav")
             if os.path.exists(output_clean):
                 os.remove(output_clean)
-
             if not recorder.post_process(None, audio_input, output_clean):
-                raise RuntimeError("Post-processing failed.")
-
+                print("❌ Post-processing failed.")
+                return
             odg, quality = run_peaq_analysis(audio_input, output_clean, processor.graphs_folder)
             if odg is None:
-                raise RuntimeError("PEAQ analysis failed.")
-
-            graph_path = os.path.join(processor.graphs_folder, f"{base_name}.png")
+                print("❌ PEAQ analysis failed.")
+                return
+            graph_path = os.path.join(processor.graphs_folder, f"{clean_name}.png")
             interruptions = len(getattr(recorder.tracker, 'interruptions', []))
-
             processor.add_result(
-                audio_file, odg, quality,
-                time.time() - start_time,
+                base_name, odg, quality,
+                time.time() - total_start_time,
                 interruptions,
                 graph_path
             )
             processor.save_results_to_excel()
+            print(f"✅ Successfully processed: ODG={odg:.2f}, Quality={quality}")
 
-        except Exception as e:
-            processor.add_result(audio_file, None, None, time.time() - start_time,
-                                 None, None, success=False, error_message=str(e))
+        audio_input = push_and_record(audio_file)
+
+        if analysis_thread:
+            analysis_thread.join()
+
+        analysis_thread = threading.Thread(target=run_analysis, args=(audio_input,))
+        analysis_thread.start()
+
+        if i + 1 < len(audio_files):
+            next_file = audio_files[i + 1]
+            next_push_thread = threading.Thread(target=push_audio, args=(next_file,))
+            next_push_thread.start()
+            next_push_thread.join()
+
+    if analysis_thread:
+        analysis_thread.join()
 
     processor.save_results_to_excel()
     processor.print_batch_summary()

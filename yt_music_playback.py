@@ -30,8 +30,12 @@ def get_mime_type(file_path):
 def play_via_yt_music(file_path, on_kill_callback=None):
     filename = os.path.basename(file_path)
     device_path = f"/sdcard/{filename}"
+
+    # ✅ QUOTED to handle local path spaces
     os.system(f'adb push "{file_path}" "{device_path}"')
-    escaped_path = urllib.parse.quote(device_path)
+
+    # ✅ Encode spaces in remote path for URI
+    escaped_path = urllib.parse.quote(device_path, safe="/")
     mime_type = get_mime_type(file_path)
 
     duration = get_audio_duration(file_path)

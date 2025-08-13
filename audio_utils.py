@@ -5,9 +5,37 @@ import numpy as np
 import librosa
 import subprocess
 import soundfile as sf
-
+import shutil
+import config
 
 from pydub import AudioSegment
+
+def validate_ffmpeg():
+    """
+    Validate FFmpeg availability and return the command to use
+    """
+    # First check if ffmpeg is in PATH
+    if shutil.which("ffmpeg"):
+        return "ffmpeg"
+    
+    # If not in PATH, try to find it using the find_ffmpeg module
+    try:
+        from find_ffmpeg import find_ffmpeg_path
+        ffmpeg_path = find_ffmpeg_path()
+        if ffmpeg_path and os.path.isfile(ffmpeg_path):
+            return ffmpeg_path
+    except ImportError:
+        pass
+    
+    # If still not found, raise an error
+    raise RuntimeError(
+        "❌ FFmpeg not found. Please:\n"
+        "1. Install FFmpeg and add to PATH, or\n"
+        "2. Place ffmpeg.exe in one of these directories:\n"
+        "   - C:\\ffmpeg\\bin\n"
+        "   - C:\\Program Files\\ffmpeg\\bin\n"
+        "   - Your project directory"
+    )
 
 def get_audio_duration(file):
     """
@@ -17,8 +45,6 @@ def get_audio_duration(file):
     audio = AudioSegment.from_file(file)
     return len(audio) / 1000.0  # Duration in seconds
 
-
-
 def load_audio(path, target_sr=44100, mono=True):
     """Stable audio loader using librosa for resampling and normalization"""
     audio, sr = librosa.load(path, sr=target_sr, mono=mono)
@@ -26,7 +52,6 @@ def load_audio(path, target_sr=44100, mono=True):
     if np.max(np.abs(audio)) > 0:
         audio /= np.max(np.abs(audio))  # Normalize
     return sr, audio
-
 
 def quick_quality_check(ref_path, test_path):
     """Quick quality check to identify major issues"""
@@ -77,11 +102,23 @@ def quick_quality_check(ref_path, test_path):
 
     return ref_bw - test_bw, test_rms / ref_rms
 
-def align_signals_by_cross_correlation(sig1, sig2, original_sr=44100, downsample_sr=8000):
+def align_signals_by_cross_correlation(sig1, sig2, original_sr=44100, downsample_sr=8000, use_alignment=True):
     """
     Efficient alignment using downsampled cross-correlation for lag estimation,
     but extracts aligned segments from original high-res signals.
+    Set use_alignment=False to skip alignment and return original signals.
     """
+    # Skip alignment if sample-level delay compensation is already applied
+    if (hasattr(config, 'ENABLE_AUTO_DELAY_COMPENSATION') and 
+        config.ENABLE_AUTO_DELAY_COMPENSATION):
+        print("🔧 Sample-level delay compensation enabled - skipping cross-correlation alignment")
+        use_alignment = False
+    
+    if not use_alignment:
+        print("🚫 Alignment is turned OFF. Returning original signals.")
+        min_len = min(len(sig1), len(sig2))
+        return sig1[:min_len], sig2[:min_len], 0
+
     # Step 1: Downsample for alignment
     sig1_ds = librosa.resample(sig1, orig_sr=original_sr, target_sr=downsample_sr)
     sig2_ds = librosa.resample(sig2, orig_sr=original_sr, target_sr=downsample_sr)
@@ -113,12 +150,17 @@ def align_signals_by_cross_correlation(sig1, sig2, original_sr=44100, downsample
 
     return sig1_aligned, sig2_aligned, lag_orig
 
-
 def trim_audio_with_ffmpeg(input_path, output_path, start_sec, duration_sec):
     """Trim audio using FFmpeg with hard duration and start time"""
+    try:
+        ffmpeg_cmd = validate_ffmpeg()
+    except RuntimeError as e:
+        print(str(e))
+        return False
+        
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     result = subprocess.run([
-        "ffmpeg", "-y",
+        ffmpeg_cmd, "-y",
         "-ss", str(start_sec),
         "-t", str(duration_sec),
         "-i", input_path,
@@ -129,3 +171,131 @@ def trim_audio_with_ffmpeg(input_path, output_path, start_sec, duration_sec):
         output_path
     ], capture_output=True)
     return result.returncode == 0
+
+def convert_and_trim_audio_with_ffmpeg(input_path, output_path, start_sec=0, duration_sec=None):
+    """
+    Convert and trim audio using FFmpeg with robust format handling
+    Handles ADPCM_MS, MP3, M4A, and other formats → standardized WAV output
+    """
+    try:
+        ffmpeg_cmd = validate_ffmpeg()
+    except RuntimeError as e:
+        print(str(e))
+        return False
+        
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    
+    cmd = [
+        ffmpeg_cmd, "-y",
+        "-i", input_path,
+        "-ss", str(start_sec),
+    ]
+    
+    # Add duration if specified
+    if duration_sec is not None:
+        cmd.extend(["-t", str(duration_sec)])
+    
+    cmd.extend([
+        "-vn",                    # No video
+        "-acodec", "pcm_s16le",   # 16-bit PCM little-endian
+        "-ar", "44100",           # Standardize to 44.1kHz
+        "-ac", "2",               # Force stereo
+        "-f", "wav",              # Force WAV container
+        "-avoid_negative_ts", "make_zero",  # Handle timing issues
+        output_path
+    ])
+    
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    
+    if result.returncode != 0:
+        print(f"❌ FFmpeg conversion failed for {input_path}")
+        print(f"Command: {' '.join(cmd)}")
+        print(f"Error: {result.stderr}")
+        return False
+    
+    print(f"✅ Converted: {os.path.basename(input_path)} → {os.path.basename(output_path)}")
+    return True
+
+def trim_test_audio_with_delay_compensation(input_path, output_path, start_sec=0, duration_sec=None, is_test_file=False):
+    """
+    Trim audio with automatic delay compensation for test files
+    Automatically trims 9ms from test files to align with reference
+    """
+    try:
+        ffmpeg_cmd = validate_ffmpeg()
+    except RuntimeError as e:
+        print(str(e))
+        return False
+        
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    
+    # Calculate actual start time with delay compensation
+    actual_start = start_sec
+    if (is_test_file and 
+        hasattr(config, 'ENABLE_AUTO_DELAY_COMPENSATION') and 
+        config.ENABLE_AUTO_DELAY_COMPENSATION and
+        hasattr(config, 'TEST_AUDIO_START_DELAY')):
+        actual_start += config.TEST_AUDIO_START_DELAY
+        print(f"🔧 Applying {config.TEST_AUDIO_START_DELAY*1000:.1f}ms delay compensation to test file")
+    
+    cmd = [
+        ffmpeg_cmd, "-y",
+        "-ss", str(actual_start),  # Start with delay compensation
+    ]
+    
+    # Add duration if specified
+    if duration_sec is not None:
+        cmd.extend(["-t", str(duration_sec)])
+    
+    cmd.extend([
+        "-i", input_path,
+        "-vn",                    # No video
+        "-acodec", "pcm_s16le",   # 16-bit PCM little-endian
+        "-ar", "44100",           # Standardize to 44.1kHz
+        "-ac", "2",               # Force stereo
+        "-f", "wav",              # Force WAV container
+        "-avoid_negative_ts", "make_zero",  # Handle timing issues
+        output_path
+    ])
+    
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    
+    if result.returncode != 0:
+        print(f"❌ FFmpeg processing failed for {input_path}")
+        print(f"Command: {' '.join(cmd)}")
+        print(f"Error: {result.stderr}")
+        return False
+    
+    delay_info = f" (with {config.TEST_AUDIO_START_DELAY*1000:.1f}ms compensation)" if is_test_file and config.ENABLE_AUTO_DELAY_COMPENSATION else ""
+    print(f"✅ Processed: {os.path.basename(input_path)} → {os.path.basename(output_path)}{delay_info}")
+    return True
+
+def process_audio_pair_with_compensation(ref_path, test_path, ref_output=None, test_output=None):
+    """
+    Process reference and test audio files with automatic delay compensation
+    """
+    if ref_output is None:
+        ref_output = ref_path.replace('.wav', '_processed.wav')
+    if test_output is None:
+        test_output = test_path.replace('.wav', '_processed.wav')
+    
+    print(f"\n🔄 Processing audio pair with delay compensation:")
+    print(f"📁 Reference: {ref_path}")
+    print(f"📁 Test: {test_path}")
+    
+    # Process reference file normally
+    ref_success = trim_test_audio_with_delay_compensation(
+        ref_path, ref_output, is_test_file=False
+    )
+    
+    # Process test file with delay compensation
+    test_success = trim_test_audio_with_delay_compensation(
+        test_path, test_output, is_test_file=True
+    )
+    
+    if ref_success and test_success:
+        print(f"✅ Both files processed successfully")
+        return ref_output, test_output
+    else:
+        print(f"❌ Processing failed")
+        return None, None
